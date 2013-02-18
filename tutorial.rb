@@ -12,14 +12,12 @@ def parse_args
     :host       => '127.0.0.1',
     :port       => '9199',
     :name       => 'tutorial',
-    :algorithm  => 'PA'
   }
 
   ARGV.options do |opts|
     opts.on('-h', '--host HOST') { |host| options[:host] = host }
     opts.on('-p', '--port NUMBER') { |port| options[:port] = port }
     opts.on('-n', '--name NAME') { |name| options[:name] = name }
-    opts.on('-a', '--algorithm NAME') { |algorithm| options[:algorithm] = algorithm }
     opts.parse!
   end
 
@@ -39,37 +37,17 @@ end
 def main
   options = parse_args
 
-  classifier = Jubatus::Client::Classifier.new(options[:host], options[:port])
-
-  converter = {
-    'string_filter_types' => {
-      'detag' => { 'method' => 'regexp', 'pattern' => '<[^>]*>', 'replace' => '' }
-    },
-    'string_filter_rules' => [
-      { 'key' => 'message', 'type' => 'detag', 'suffix' => '-detagged' }
-    ],
-    'num_filter_types' => {},
-    'num_filter_rules' => [],
-    'string_types' => {},
-    'string_rules' => [
-      { 'key' => 'message-detagged', 'type' => 'space', 'sample_weight' => 'bin', 'global_weight' => 'bin' }
-    ],
-    'num_types' => {},
-    'num_rules' => []
-  }
-
-  config = Jubatus::Config_data.new(options[:algorithm], JSON.generate(converter))
+  classifier = Jubatus::Classifier::Client::Classifier.new(options[:host], options[:port])
 
   name = options[:name]
 
-  puts classifier.set_config(name, config)
   puts classifier.get_config(name)
   puts classifier.get_status(name)
 
   IO.foreach('train.dat') do |line|
     label, file = line.chomp.split(',')
     dat = open(file).read
-    datum = Jubatus::Datum.new([['message', dat]], [])
+    datum = Jubatus::Classifier::Datum.new([['message', dat]], [])
     classifier.train(name, [[label, datum]])
     puts classifier.get_status(name)
   end
@@ -77,13 +55,12 @@ def main
   puts classifier.save(name, 'tutorial')
 
   puts classifier.load(name, 'tutorial')
-  puts classifier.set_config(name, config)
   puts classifier.get_config(name)
 
   IO.foreach('test.dat') do |line|
     label, file = line.chomp.split(',')
     dat = open(file).read
-    datum = Jubatus::Datum.new([['message', dat]], [])
+    datum = Jubatus::Classifier::Datum.new([['message', dat]], [])
     answer = classifier.classify(name, [datum])
     unless answer.nil?
       estimate = get_most_likely(answer[0])
